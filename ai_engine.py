@@ -29,7 +29,7 @@ def ask_gemini(prompt):
     client = genai.Client(api_key=get_api_key())
 
     # Use a model currently available to your API key.
-    model_name = "gemini-3.5-flash"
+    model_name = "gemini-3.5-flash-lite"
 
     response = client.models.generate_content(
         model=model_name,
