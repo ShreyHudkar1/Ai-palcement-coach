@@ -6,45 +6,99 @@ from ai_engine import ask_gemini, get_api_key
 
 
 TRAINING_OPTIONS = {
-    "Spoken English": (
-        "Improve fluency, natural phrasing, clarity, "
-        "and confidence in everyday English conversation."
-    ),
-    "Grammar": (
-        "Identify grammar mistakes, explain corrections simply, "
-        "and give a short practice exercise."
-    ),
-    "Vocabulary": (
-        "Teach useful English words and phrases with meanings, "
-        "natural examples, and a short usage exercise."
-    ),
-    "Articulation": (
-        "Help the learner organize thoughts, speak concisely, "
-        "and express ideas in a clear structure."
-    ),
-    "Group Discussion": (
-        "Practise opening statements, logical arguments, examples, "
-        "agreeing or disagreeing politely, and entering a discussion."
-    ),
-    "Interview English": (
-        "Practise professional interview answers using clear "
-        "structure, relevant examples, and natural English."
-    ),
+    "Spoken English": "Fluency, pronunciation, clarity, and natural phrasing.",
+    "Grammar": "Grammar, sentence construction, and correct English usage.",
+    "Vocabulary": "Word choice, vocabulary range, and natural expressions.",
+    "Articulation": "Logical structure, concise expression, and clear communication.",
+    "Group Discussion": "Arguments, examples, and professional communication.",
+    "Interview English": "Interview answers, structure, relevance, and clarity.",
 }
 
 
-def transcribe_audio(audio_bytes, mime_type="audio/wav"):
-    """Convert a recorded answer into text using Gemini."""
+def analyse_recording(audio_bytes, mime_type, skill, exercise):
+    """Analyse the original audio and generate a detailed speaking report."""
     client = genai.Client(api_key=get_api_key())
+
+    prompt = f"""
+You are a professional and supportive English-speaking coach.
+
+PRACTICE SKILL: {skill}
+
+EXERCISE:
+{exercise}
+
+Analyse the original audio recording directly. Do not rely only on
+a transcript when evaluating features that can be heard in the audio.
+
+First transcribe the learner's response accurately. Then produce
+a detailed English assessment.
+
+SCORING RUBRIC — TOTAL 100:
+1. Grammar and sentence construction: 15 points
+2. Vocabulary and natural phrasing: 15 points
+3. Fluency and pace: 20 points
+4. Pronunciation and intelligibility: 20 points
+5. Articulation and structure: 15 points
+6. Relevance and completeness: 15 points
+
+The six scores must add up to exactly 100 maximum points.
+Award a score for each category and ensure the total matches.
+
+ASSESSMENT RULES:
+- Use the audio for pronunciation and pace observations when possible.
+- Do not penalise a learner merely for having an Indian or regional accent.
+- Focus on intelligibility and specific sounds, not accent conformity.
+- Do not invent pronunciation errors or speaking habits.
+- If audio quality or duration limits an assessment, state that limitation.
+- Treat all scores as approximate coaching estimates, not certified results.
+
+REPORT FORMAT:
+
+# 1. Overall Score
+Give the score out of 100 and explain it briefly.
+
+# 2. Scorecard
+Show each category, score earned, maximum points, and reason.
+
+# 3. Transcript
+Write the words heard. Mark uncertain words clearly.
+
+# 4. Pronunciation and Clarity
+Identify specific words that may need practice, explain the issue,
+and give a practical correction where evidence supports it.
+
+# 5. Fluency and Pace
+Discuss pace, pauses, hesitation, and continuity when observable.
+
+# 6. Grammar Corrections
+Quote original phrases, correct them, and explain the corrections.
+
+# 7. Vocabulary
+Suggest more natural expressions where useful.
+
+# 8. Articulation and Structure
+Evaluate the opening, logical flow, examples, and conclusion.
+
+# 9. Strengths
+List the strongest aspects of the response.
+
+# 10. Three Priority Improvements
+Give three specific and achievable improvements.
+
+# 11. Improved Example
+Provide a natural example preserving the learner's meaning.
+Do not invent personal experiences.
+
+# 12. Ten-Minute Improvement Drill
+Create a drill targeting the most important weakness.
+
+Be honest, specific, constructive, and supportive.
+"""
 
     response = client.models.generate_content(
         model="gemini-3.5-flash",
         contents=[
-            (
-                "Transcribe the learner's recording accurately. "
-                "Return only the words spoken. Do not correct grammar, "
-                "summarise, or add commentary."
-            ),
+            prompt,
             types.Part.from_bytes(
                 data=audio_bytes,
                 mime_type=mime_type or "audio/wav",
@@ -55,39 +109,39 @@ def transcribe_audio(audio_bytes, mime_type="audio/wav"):
     return (response.text or "").strip()
 
 
-def review_response(skill, exercise, answer, response_mode):
-    """Review a learner's answer and provide actionable feedback."""
+def review_written_answer(skill, exercise, answer):
+    """Review a written answer without making unsupported audio claims."""
     prompt = f"""
-You are a supportive but honest English language coach.
+You are a supportive English coach.
 
-Selected skill: {skill}
+Skill: {skill}
 Exercise: {exercise}
-Response method: {response_mode}
-
-Learner's response:
+Learner's written answer:
 {answer}
 
-Review the response using these sections:
+Evaluate the written answer with this rubric:
+1. Grammar and sentence construction: 15
+2. Vocabulary and natural phrasing: 15
+3. Fluency of expression in writing: 20
+4. Pronunciation and intelligibility: not assessable from text
+5. Articulation and structure: 15
+6. Relevance and completeness: 15
 
-1. Overall score out of 10
-2. What the learner did well
-3. Grammar and sentence corrections
-   - Quote the original phrase.
-   - Give the corrected version.
-   - Explain why in simple English.
-4. Vocabulary and more natural phrasing
-5. Clarity and structure
-6. A stronger example response that preserves the learner's meaning
-7. One specific improvement goal for the next practice
+Provide a score out of 60 for the assessable writing categories.
+Do not invent a pronunciation score or claim to measure speaking pace.
+Explain that the full speaking score out of 100 requires an audio recording.
+
+Include:
+1. Scorecard with earned points and reasons
+2. Strengths
+3. Original phrases, corrected versions, and simple explanations
+4. Vocabulary improvements
+5. Clarity and structure feedback
+6. A better example response preserving the learner's meaning
+7. Three improvement priorities
 8. A short exercise for tomorrow
 
-Be specific, practical, and encouraging.
-Do not invent pronunciation problems from a transcript.
-Do not claim to measure speaking speed, accent, confidence, or
-pronunciation from text alone.
-
-For a recorded response, explain that the feedback is based primarily
-on the transcription. Do not pretend to have analysed audio features.
+Be specific, honest, and encouraging. Do not invent personal experiences.
 """
     return ask_gemini(prompt)
 
@@ -95,8 +149,8 @@ on the transcription. Do not pretend to have analysed audio features.
 def render_english_coach():
     st.header("English Improvement Coach")
     st.write(
-        "Choose a skill, practise by typing or speaking, "
-        "and receive personalised feedback."
+        "Practise speaking or writing, receive a detailed report, "
+        "and work on your next improvement goal."
     )
 
     skill = st.selectbox(
@@ -122,27 +176,18 @@ def render_english_coach():
         prompt = f"""
 You are a supportive English coach for an MBA student.
 
-Training skill: {skill}
-Available practice time: {duration}
-Training goal: {TRAINING_OPTIONS[skill]}
+Skill: {skill}
+Duration: {duration}
+Goal: {TRAINING_OPTIONS[skill]}
 
-Create ONE practical exercise.
+Create one practical exercise achievable in the selected time.
+Use simple English and include:
+1. Today's goal
+2. One exact question or task
+3. Numbered instructions
+4. Success criteria
 
-Requirements:
-1. Use simple, clear English.
-2. Give the exact task or question the learner must answer.
-3. Explain how to complete it in numbered steps.
-4. Make it realistic for college, interviews, presentations,
-   group discussions, or everyday communication.
-5. Keep it achievable in the selected time.
-6. Do not provide the sample answer before the learner tries.
-7. Encourage the learner without exaggerated praise.
-
-Format:
-Today's Goal
-Exercise
-Instructions
-Success Criteria
+Do not provide a sample answer before the learner tries.
 """
         try:
             with st.spinner("Preparing your exercise..."):
@@ -150,9 +195,8 @@ Success Criteria
 
             st.session_state["english_coach_active_skill"] = skill
             st.session_state["english_coach_exercise"] = exercise
-            st.session_state["english_coach_feedback"] = None
-            st.session_state["english_coach_transcript_edit"] = ""
-            st.session_state["english_coach_answer"] = ""
+            st.session_state["english_coach_audio_report"] = None
+            st.session_state["english_coach_written_report"] = None
 
         except Exception as error:
             st.error("Could not generate the exercise.")
@@ -164,8 +208,7 @@ Success Criteria
         return
 
     active_skill = st.session_state.get(
-        "english_coach_active_skill",
-        skill,
+        "english_coach_active_skill", skill
     )
 
     st.divider()
@@ -175,17 +218,17 @@ Success Criteria
     st.divider()
     st.subheader("Practise Your Answer")
 
-    response_method = st.radio(
-        "How would you like to practise?",
+    method = st.radio(
+        "Choose your practice method",
         ["Record my voice", "Type my answer"],
         horizontal=True,
         key="english_coach_response_method",
     )
 
-    if response_method == "Record my voice":
+    if method == "Record my voice":
         st.write(
-            "Press the microphone button, record your answer, "
-            "and finish the recording when you are done."
+            "Record your answer, listen to it, and request your "
+            "speaking assessment when you are ready."
         )
 
         audio = st.audio_input(
@@ -199,89 +242,53 @@ Success Criteria
             st.audio(audio)
 
             if st.button(
-                "Transcribe my recording",
-                key="english_coach_transcribe",
+                "Analyse my recording and generate report",
+                key="english_coach_analyse_audio",
                 type="primary",
             ):
                 try:
-                    with st.spinner("Converting your speech into text..."):
-                        transcript = transcribe_audio(
+                    with st.spinner(
+                        "Analysing your recording and preparing your report..."
+                    ):
+                        report = analyse_recording(
                             audio.getvalue(),
                             getattr(audio, "type", None) or "audio/wav",
+                            active_skill,
+                            exercise,
                         )
 
-                    if transcript:
+                    if report:
                         st.session_state[
-                            "english_coach_transcript_edit"
-                        ] = transcript
-                        st.session_state[
-                            "english_coach_answer"
-                        ] = transcript
-                        st.session_state[
-                            "english_coach_feedback"
-                        ] = None
-                        st.success("Recording transcribed successfully.")
+                            "english_coach_audio_report"
+                        ] = report
                     else:
-                        st.warning(
-                            "No speech was detected. Please try recording again."
-                        )
+                        st.warning("The AI returned an empty report.")
 
                 except Exception as error:
-                    st.error("Could not transcribe your recording.")
+                    st.error("Could not analyse your recording.")
                     st.caption(f"Technical details: {error}")
 
-        transcript = st.session_state.get(
-            "english_coach_transcript_edit",
-            "",
-        )
+        report = st.session_state.get("english_coach_audio_report")
 
-        if transcript:
-            st.write("**Review your transcript**")
-            st.caption(
-                "Correct any transcription mistakes before requesting feedback."
+        if report:
+            st.divider()
+            st.subheader("Your Speaking Assessment")
+            st.markdown(report)
+
+            st.download_button(
+                "Download my speaking report",
+                data=report,
+                file_name="english_speaking_report.md",
+                mime="text/markdown",
+                key="download_english_audio_report",
             )
-
-            edited_transcript = st.text_area(
-                "Your spoken answer",
-                key="english_coach_transcript_edit",
-                height=180,
-                placeholder="Your transcribed answer will appear here...",
-            )
-
-            if st.button(
-                "Review my spoken English",
-                key="english_coach_review_spoken",
-                type="primary",
-            ):
-                if not edited_transcript.strip():
-                    st.warning("Please record or enter an answer first.")
-                else:
-                    try:
-                        with st.spinner("Reviewing your English..."):
-                            feedback = review_response(
-                                active_skill,
-                                exercise,
-                                edited_transcript.strip(),
-                                "spoken and transcribed",
-                            )
-
-                        st.session_state[
-                            "english_coach_feedback"
-                        ] = feedback
-                        st.session_state[
-                            "english_coach_answer"
-                        ] = edited_transcript.strip()
-
-                    except Exception as error:
-                        st.error("Could not review your answer.")
-                        st.caption(f"Technical details: {error}")
 
     else:
-        typed_answer = st.text_area(
-            "Write your response here",
-            key="english_coach_typed_response",
+        answer = st.text_area(
+            "Write your answer in English",
             height=180,
-            placeholder="Write your answer in English...",
+            key="english_coach_typed_response",
+            placeholder="Write your response here...",
         )
 
         if st.button(
@@ -289,37 +296,44 @@ Success Criteria
             key="english_coach_review_typed",
             type="primary",
         ):
-            if not typed_answer.strip():
+            if not answer.strip():
                 st.warning("Please enter your response first.")
             else:
                 try:
-                    with st.spinner("Reviewing your English..."):
-                        feedback = review_response(
+                    with st.spinner("Preparing your feedback report..."):
+                        report = review_written_answer(
                             active_skill,
                             exercise,
-                            typed_answer.strip(),
-                            "typed",
+                            answer.strip(),
                         )
 
                     st.session_state[
-                        "english_coach_feedback"
-                    ] = feedback
-                    st.session_state[
-                        "english_coach_answer"
-                    ] = typed_answer.strip()
+                        "english_coach_written_report"
+                    ] = report
 
                 except Exception as error:
-                    st.error("Could not review your answer.")
+                    st.error("Could not review your written answer.")
                     st.caption(f"Technical details: {error}")
 
-    feedback = st.session_state.get("english_coach_feedback")
-
-    if feedback:
-        st.divider()
-        st.subheader("Your Personalised Feedback")
-        st.markdown(feedback)
-
-        st.caption(
-            "Note: A score out of 10 is an AI-generated learning estimate, "
-            "not a formal language proficiency test."
+        written_report = st.session_state.get(
+            "english_coach_written_report"
         )
+
+        if written_report:
+            st.divider()
+            st.subheader("Your Written-English Report")
+            st.markdown(written_report)
+
+            st.download_button(
+                "Download my written-English report",
+                data=written_report,
+                file_name="english_written_report.md",
+                mime="text/markdown",
+                key="download_english_written_report",
+            )
+
+    st.caption(
+        "Scores are AI-generated learning estimates. Audio quality, "
+        "recording length, and model limitations may affect results."
+    )
+ 
